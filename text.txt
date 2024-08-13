@@ -1,0 +1,182 @@
+import 'package:flutter/material.dart';
+import 'google_drive_service.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:google_sign_in/google_sign_in.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: MyHomePage(),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  @override
+  _MyHomePageState createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final GoogleDriveService _googleDriveService = GoogleDriveService();
+  List<drive.File>? _files;
+  bool _isSignedIn = false;
+  String? _folderId;
+  GoogleSignInAccount? _currentUser;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        
+        actions: [
+          if (_isSignedIn && _currentUser?.photoUrl != null)
+            CircleAvatar(
+              backgroundImage: NetworkImage(_currentUser!.photoUrl!),
+            ),
+          IconButton(
+            icon: Icon(_isSignedIn ? Icons.logout : Icons.login),
+            onPressed: _isSignedIn ? _signOut : _signIn,
+          ),
+        ],
+      ),
+      body: _isSignedIn
+          ? _files == null
+              ? Center(child: CircularProgressIndicator())
+              : _buildGridView()
+          : Center(child: Text('Please sign in to access your Google Drive')),
+      floatingActionButton: _isSignedIn
+          ? FloatingActionButton(
+              onPressed: _uploadFile,
+              child: Icon(Icons.upload),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildGridView() {
+  return Container(
+    color: Colors.white, // Define a cor de fundo como branca
+    child: Padding(
+      padding: const EdgeInsets.all(8.0), // Adiciona margem de 8.0 em todas as direções
+      child: GridView.builder(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4, // 4 arquivos por linha
+          crossAxisSpacing: 4.0,
+          mainAxisSpacing: 4.0,
+        ),
+        itemCount: _files?.length ?? 0,
+        itemBuilder: (context, index) {
+          final file = _files![index];
+          final fileTypeIcon = _getFileTypeIcon(file);
+
+          return GestureDetector(
+            onTap: () async {
+              if (await _googleDriveService.isFolder(file.id!)) {
+                await _openFolder(file.id!);
+              } else {
+                await _downloadFile(file.id!, file.name!);
+              }
+            },
+            child: GridTile(
+              footer: Text(file.name ?? 'Unnamed'),
+              child: Icon(fileTypeIcon, size: 40.0),
+            ),
+          );
+        },
+      ),
+    ),
+  );
+}
+
+
+
+  IconData _getFileTypeIcon(drive.File file) {
+    if (file.mimeType == 'application/vnd.google-apps.folder') {
+      return Icons.folder;
+    } else if (file.mimeType == 'application/pdf') {
+      return Icons.picture_as_pdf;
+    } else if (file.mimeType?.startsWith('image/') ?? false) {
+      return Icons.image;
+    } else if (file.mimeType?.startsWith('video/') ?? false) {
+      return Icons.videocam;
+    } else {
+      return Icons.insert_drive_file;
+    }
+  }
+
+  Future<void> _signIn() async {
+    try {
+      await _googleDriveService.signIn();
+      _currentUser = _googleDriveService.getCurrentUser();
+      setState(() {
+        _isSignedIn = true;
+      });
+      _folderId = await _googleDriveService.getFolderId('pasta');
+      _listFiles();
+    } catch (error) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Sign in failed: $error')));
+    }
+  }
+
+  Future<void> _signOut() async {
+    await _googleDriveService.signOut();
+    setState(() {
+      _isSignedIn = false;
+      _files = null;
+      _folderId = null;
+    });
+  }
+
+  Future<void> _listFiles() async {
+    try {
+      if (_folderId == null) return;
+      final files = await _googleDriveService.listFiles(_folderId!);
+      setState(() {
+        _files = files;
+      });
+    } catch (error) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error listing files: $error')));
+    }
+  }
+
+  Future<void> _uploadFile() async {
+    final result = await FilePicker.platform.pickFiles();
+    if (result != null) {
+      final file = File(result.files.single.path!);
+      await _googleDriveService.uploadFile(file, _folderId!);
+      _listFiles();
+    }
+  }
+
+  Future<void> _downloadFile(String fileId, String fileName) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final saveFile = File('${directory.path}/$fileName');
+    await _googleDriveService.downloadFile(fileId, saveFile);
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('File downloaded to ${saveFile.path}')));
+  }
+
+  Future<void> _openFolder(String folderId) async {
+    try {
+      _folderId = folderId;
+      await _listFiles();
+    } catch (error) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error opening folder: $error')));
+    }
+  }
+}
