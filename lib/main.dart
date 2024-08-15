@@ -126,7 +126,7 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _screens = [
         HomeScreen(),
-        DocumentsScreen(),
+        DocumentsScreen(folderId: widget.folderId!), // Passando o folderId
         UploadScreen(_googleDriveService, widget.folderId!),
       ];
     });
@@ -179,6 +179,7 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 }
+
 
 class HomeScreen extends StatelessWidget {
   @override

@@ -3,8 +3,13 @@ import 'google_drive_service.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'main.dart';
 
 class DocumentsScreen extends StatefulWidget {
+  final String folderId;
+
+  DocumentsScreen({required this.folderId});
+
   @override
   _DocumentsScreenState createState() => _DocumentsScreenState();
 }
@@ -13,7 +18,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   final GoogleDriveService _googleDriveService = GoogleDriveService();
   List<drive.File>? _files;
   bool _isSignedIn = false;
-  String? _folderId;
 
   @override
   void initState() {
@@ -27,11 +31,22 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       setState(() {
         _isSignedIn = true;
       });
-      _folderId = await _googleDriveService.getFolderId('pasta');
-      _listFiles();
+      _listFiles(); // Agora usa o folderId passado pelo widget
     } catch (error) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Sign in failed: $error')));
+    }
+  }
+
+  Future<void> _listFiles() async {
+    try {
+      final files = await _googleDriveService.listFiles(widget.folderId);
+      setState(() {
+        _files = files;
+      });
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to list files: $error')));
     }
   }
 
@@ -45,6 +60,29 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     } else {
       return Icons.insert_drive_file;
     }
+  }
+
+  Future<void> _downloadFile(String fileId, String fileName) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final savePath = File('${directory.path}/$fileName');
+    try {
+      await _googleDriveService.downloadFile(fileId, savePath);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Downloaded to $savePath')));
+    } catch (error) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Download failed: $error')));
+    }
+  }
+
+  Future<void> _openFolder(String folderId) async {
+    setState(() {
+      _files = null; // Clear current files to show a loading indicator
+    });
+    final files = await _googleDriveService.listFiles(folderId);
+    setState(() {
+      _files = files;
+    });
   }
 
   @override
@@ -92,38 +130,38 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               child: Text('Please sign in to access your Google Drive')),
     );
   }
-
-  Future<void> _listFiles() async {
-    try {
-      if (_folderId == null) return;
-      final files = await _googleDriveService.listFiles(_folderId!);
-      setState(() {
-        _files = files;
-      });
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to list files: $error')));
-    }
-  }
-
-  Future<void> _downloadFile(String fileId, String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final savePath = File('${directory.path}/$fileName');
-    try {
-      await _googleDriveService.downloadFile(fileId, savePath);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Downloaded to $savePath')));
-    } catch (error) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Download failed: $error')));
-    }
-  }
-
-  Future<void> _openFolder(String folderId) async {
-    setState(() {
-      _folderId = folderId;
-      _files = null; // Clear current files to show a loading indicator
-    });
-    _listFiles();
-  }
 }
+
+  // Future<void> _listFiles() async {
+  //   try {
+  //     if (_folderId == null) return;
+  //     final files = await _googleDriveService.listFiles(_folderId!);
+  //     setState(() {
+  //       _files = files;
+  //     });
+  //   } catch (error) {
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(content: Text('Failed to list files: $error')));
+  //   }
+  // }
+
+  // Future<void> _downloadFile(String fileId, String fileName) async {
+  //   final directory = await getApplicationDocumentsDirectory();
+  //   final savePath = File('${directory.path}/$fileName');
+  //   try {
+  //     await _googleDriveService.downloadFile(fileId, savePath);
+  //     ScaffoldMessenger.of(context)
+  //         .showSnackBar(SnackBar(content: Text('Downloaded to $savePath')));
+  //   } catch (error) {
+  //     ScaffoldMessenger.of(context)
+  //         .showSnackBar(SnackBar(content: Text('Download failed: $error')));
+  //   }
+  // }
+
+  // Future<void> _openFolder(String folderId) async {
+  //   setState(() {
+  //     _folderId = folderId;
+  //     _files = null; // Clear current files to show a loading indicator
+  //   });
+  //   _listFiles();
+  // }
