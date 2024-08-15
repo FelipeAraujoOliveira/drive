@@ -117,18 +117,34 @@ class GoogleDriveService {
     }
   }
 
-  //criar uma pasta para o cliente
-  Future<String> createClientFolder() async {
+  Future<String> createFolder(String folderName) async {
     if (_driveApi == null) {
       throw Exception('Not authenticated');
     }
 
     final folder = drive.File()
-      ..name = 'Client Folder'
+      ..name = folderName
       ..mimeType = 'application/vnd.google-apps.folder';
 
     final folderCreation = await _driveApi!.files.create(folder);
     return folderCreation.id!;
+  }
+
+  Future<void> shareFolderWithUser(String folderId, String userEmail) async {
+    if (_driveApi == null) {
+      throw Exception('Not authenticated');
+    }
+
+    final permission = drive.Permission()
+      ..type = "user"
+      ..role = "writer"
+      ..emailAddress = userEmail;
+
+    await _driveApi!.permissions.create(
+      permission,
+      folderId,
+      sendNotificationEmail: false,
+    );
   }
 }
 
