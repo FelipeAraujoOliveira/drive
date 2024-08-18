@@ -9,7 +9,6 @@ import 'splashScreen.dart';
 import 'documentScreen.dart';
 import 'loginScreen.dart'; // Certifique-se de importar a tela de login
 
-// Inicialize authenticatedDriveService na própria inicialização do aplicativo
 GoogleDriveService authenticatedDriveService = GoogleDriveService();
 
 void main() async {
@@ -56,13 +55,33 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _initializeScreens() async {
     final folderId = widget.folderId ?? "root";
+
+    // Verifica se authenticatedDriveService foi inicializado
+    if (authenticatedDriveService == null) {
+      throw Exception("authenticatedDriveService não foi inicializado corretamente.");
+    }
+
     setState(() {
       _screens = [
         HomeScreen(),
         DocumentsScreen(folderId: folderId),
-        UploadScreen(authenticatedDriveService, folderId),
+        UploadScreen(authenticatedDriveService!, folderId), // Usa o operador `!` para garantir que não é nulo
       ];
     });
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  Future<void> _logout() async {
+    await authenticatedDriveService?.signOut(); // Sign out from Google
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => LoginScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -73,10 +92,48 @@ class _MainScreenState extends State<MainScreen> {
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {
-              // Ação para o botão de usuário
+              Scaffold.of(context).openDrawer(); // Open the drawer when the user icon is pressed
             },
           ),
         ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: <Widget>[
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Text(
+                'Menu',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.settings),
+              title: Text('Configurações'),
+              onTap: () {
+                // Navegue para a tela de configurações se necessário
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Configurações ainda não implementadas.')),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.logout),
+              title: Text('Logout'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _logout(); // Chama a função de logout
+              },
+            ),
+          ],
+        ),
       ),
       body: _screens == null
           ? const Center(child: CircularProgressIndicator())
@@ -100,12 +157,6 @@ class _MainScreenState extends State<MainScreen> {
         onTap: _onItemTapped,
       ),
     );
-  }
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
   }
 }
 
