@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:google_sign_in/google_sign_in.dart'; // Certifique-se de que esta linha esteja presente
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
-//Google
 class GoogleDriveService {
   final GoogleSignIn _googleSignIn =
       GoogleSignIn.standard(scopes: [drive.DriveApi.driveScope]);
@@ -25,7 +24,10 @@ class GoogleDriveService {
       _httpClient = IOClient();
       final authenticatedClient = GoogleHttpClient(authHeaders, _httpClient!);
       _driveApi = drive.DriveApi(authenticatedClient);
+
+      print("Usuário autenticado: ${_currentUser?.email}");
     } catch (error) {
+      print("Erro ao autenticar: $error");
       throw Exception('Sign in failed: $error');
     }
   }
@@ -40,6 +42,7 @@ class GoogleDriveService {
 
   //obter usuario atual
   GoogleSignInAccount? getCurrentUser() {
+    print("Usuário atual: ${_currentUser?.email}");
     return _currentUser;
   }
 
