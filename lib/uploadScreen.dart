@@ -3,7 +3,6 @@ import 'google_drive_service.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
-
 class UploadScreen extends StatelessWidget {
   final GoogleDriveService _googleDriveService;
   final String _folderId;
@@ -19,17 +18,31 @@ class UploadScreen extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () async {
-            FilePickerResult? result = await FilePicker.platform.pickFiles();
+            try {
+              // Verifique se o serviço está autenticado
+              if (_googleDriveService.getCurrentUser() == null) {
+                await _googleDriveService.signIn();
+              }
 
-            if (result != null) {
-              File file = File(result.files.single.path!);
-              await _googleDriveService.uploadFile(file, _folderId);
+              // Selecionar o arquivo para upload
+              FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+              if (result != null) {
+                File file = File(result.files.single.path!);
+                await _googleDriveService.uploadFile(file, _folderId);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Upload bem-sucedido!')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Nenhum arquivo selecionado.')),
+                );
+              }
+            } catch (error) {
+              // Tratamento de erro durante o upload
+              print("Erro durante o upload: $error");
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Upload bem-sucedido!')),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Nenhum arquivo selecionado.')),
+                SnackBar(content: Text('Erro ao fazer upload: $error')),
               );
             }
           },

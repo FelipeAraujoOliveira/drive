@@ -14,36 +14,63 @@ class GoogleDriveService {
 
   //login
   Future<void> signIn() async {
-    try {
-      _currentUser = await _googleSignIn.signIn();
-      if (_currentUser == null) {
-        throw Exception('User cancelled login');
-      }
-
-      final authHeaders = await _currentUser!.authHeaders;
-      _httpClient = IOClient();
-      final authenticatedClient = GoogleHttpClient(authHeaders, _httpClient!);
-      _driveApi = drive.DriveApi(authenticatedClient);
-
-      print("Usuário autenticado: ${_currentUser?.email}");
-    } catch (error) {
-      print("Erro ao autenticar: $error");
-      throw Exception('Sign in failed: $error');
+  try {
+    _currentUser = await _googleSignIn.signIn();
+    if (_currentUser == null) {
+      throw Exception('Login cancelado pelo usuário.');
     }
+
+    final authHeaders = await _currentUser!.authHeaders;
+    _httpClient = IOClient();
+    final authenticatedClient = GoogleHttpClient(authHeaders, _httpClient!);
+    _driveApi = drive.DriveApi(authenticatedClient);
+
+    print("Usuário autenticado: ${_currentUser?.email}");
+    print("Drive API inicializado com sucesso.");
+  } catch (error) {
+    print("Erro durante a autenticação: $error");
+    throw Exception('Falha no login: $error');
   }
+}
+
+
 
   //logout
   Future<void> signOut() async {
+  try {
     await _googleSignIn.signOut();
     _currentUser = null;
     _driveApi = null;
     _httpClient?.close();
+    _httpClient = null; // Certifique-se de que o httpClient seja completamente redefinido
+    print("Usuário deslogado com sucesso.");
+  } catch (error) {
+    print("Erro durante o logout: $error");
   }
+}
+
+
 
   //obter usuario atual
   GoogleSignInAccount? getCurrentUser() {
     print("Usuário atual: ${_currentUser?.email}");
     return _currentUser;
+  }
+
+  // Verificar se uma pasta existe
+  Future<bool> doesFolderExist(String folderId) async {
+    if (_driveApi == null) {
+      throw Exception('Not authenticated');
+    }
+
+    try {
+      final file = await _driveApi!.files.get(folderId, $fields: 'id') as drive.File;
+      return file.id != null;
+    } catch (e) {
+      // Se houver um erro, a pasta provavelmente não existe ou o ID está incorreto
+      print('Erro ao verificar a existência da pasta: $e');
+      return false;
+    }
   }
 
   //definir id da pasta
