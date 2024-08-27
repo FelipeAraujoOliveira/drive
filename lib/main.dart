@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'splashScreen.dart';
 import 'documentScreen.dart';
 import 'loginScreen.dart'; // Certifique-se de importar a tela de login
+import 'settings_screen.dart';
 
 GoogleDriveService authenticatedDriveService = GoogleDriveService();
 
@@ -58,14 +59,16 @@ class _MainScreenState extends State<MainScreen> {
 
     // Verifica se authenticatedDriveService foi inicializado
     if (authenticatedDriveService == null) {
-      throw Exception("authenticatedDriveService não foi inicializado corretamente.");
+      throw Exception(
+          "authenticatedDriveService não foi inicializado corretamente.");
     }
 
     setState(() {
       _screens = [
         HomeScreen(),
         DocumentsScreen(folderId: folderId),
-        UploadScreen(authenticatedDriveService!, folderId), // Usa o operador `!` para garantir que não é nulo
+        UploadScreen(authenticatedDriveService!,
+            folderId), // Usa o operador `!` para garantir que não é nulo
       ];
     });
   }
@@ -92,7 +95,8 @@ class _MainScreenState extends State<MainScreen> {
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {
-              Scaffold.of(context).openDrawer(); // Open the drawer when the user icon is pressed
+              Scaffold.of(context)
+                  .openDrawer(); // Open the drawer when the user icon is pressed
             },
           ),
         ],
@@ -117,10 +121,8 @@ class _MainScreenState extends State<MainScreen> {
               leading: Icon(Icons.settings),
               title: Text('Configurações'),
               onTap: () {
-                // Navegue para a tela de configurações se necessário
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Configurações ainda não implementadas.')),
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => SettingsScreen()),
                 );
               },
             ),

@@ -28,7 +28,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     try {
       if (authenticatedDriveService != null) {
         print("Carregando arquivos da pasta com ID: ${widget.folderId}");
-        final files = await authenticatedDriveService!.listFiles(widget.folderId);
+        final files =
+            await authenticatedDriveService!.listFiles(widget.folderId);
         setState(() {
           _files = files;
         });
@@ -63,11 +64,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     if (file.mimeType == 'application/vnd.google-apps.folder') {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) => DocumentsScreen(folderId: file.id!),
+                          builder: (context) =>
+                              DocumentsScreen(folderId: file.id!),
                         ),
                       );
                     } else {
-                      _downloadFile(file.id!, file.name!);
+                      _showFileDetailsModal(context, file);
                     }
                   },
                   child: GridTile(
@@ -90,19 +92,92 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     );
   }
 
-  Future<void> _downloadFile(String fileId, String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final savePath = File('${directory.path}/$fileName');
-    try {
-      await authenticatedDriveService!.downloadFile(fileId, savePath);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Downloaded to $savePath')),
+  void _showFileDetailsModal(BuildContext context, drive.File file) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (BuildContext modalContext) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Detalhes do Arquivo',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close),
+                  onPressed: () {
+                    Navigator.of(modalContext).pop(); // Usar o context do modal aqui
+                  },
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Nome: ${file.name}',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Tipo: ${file.mimeType ?? 'Desconhecido'}',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 16),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  Navigator.of(modalContext).pop(); // Feche o modal primeiro
+
+                  final directory = await getApplicationDocumentsDirectory();
+                  final savePath = File('${directory.path}/${file.name}');
+                  bool downloadSuccess = false;
+
+                  try {
+                    await authenticatedDriveService!.downloadFile(file.id!, savePath);
+                    downloadSuccess = true;
+                  } catch (error) {
+                    print("Erro ao baixar arquivo: $error");
+                  }
+
+                  // Depois que o modal for fechado, mostre o SnackBar
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          downloadSuccess ? 'Download concluído para ${savePath.path}' : 'Falha no download',
+                        ),
+                      ),
+                    );
+                  }
+                },
+                icon: Icon(Icons.download),
+                label: Text('Fazer Download'),
+              ),
+            ),
+          ],
+        ),
       );
-    } catch (error) {
-      print("Erro ao baixar arquivo: $error");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $error')),
-      );
+    },
+  );
+}
+
+  String _formatDateTime(DateTime? dateTime) {
+    if (dateTime == null) {
+      return 'Desconhecido';
     }
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
