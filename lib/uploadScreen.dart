@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'google_drive_service.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class UploadScreen extends StatelessWidget {
   final GoogleDriveService _googleDriveService;
-  final String _folderId;
 
-  UploadScreen(this._googleDriveService, this._folderId);
+  UploadScreen(this._googleDriveService);
 
   @override
   Widget build(BuildContext context) {
@@ -18,31 +18,25 @@ class UploadScreen extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () async {
-            try {
-              // Verifique se o serviço está autenticado
-              if (_googleDriveService.getCurrentUser() == null) {
-                await _googleDriveService.signIn();
+            FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+            if (result != null) {
+              File file = File(result.files.single.path!); // Usa o File de dart:io
+
+              // Obter o diretório de upload salvo ou usar um padrão
+              SharedPreferences prefs = await SharedPreferences.getInstance();
+              String? directoryPath = prefs.getString('uploadDirectory');
+              if (directoryPath == null) {
+                directoryPath = 'some-default-folder-id'; // Substitua pelo ID da pasta padrão
               }
 
-              // Selecionar o arquivo para upload
-              FilePickerResult? result = await FilePicker.platform.pickFiles();
-
-              if (result != null) {
-                File file = File(result.files.single.path!);
-                await _googleDriveService.uploadFile(file, _folderId);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Upload bem-sucedido!')),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Nenhum arquivo selecionado.')),
-                );
-              }
-            } catch (error) {
-              // Tratamento de erro durante o upload
-              print("Erro durante o upload: $error");
+              await _googleDriveService.uploadFile(file, directoryPath);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Erro ao fazer upload: $error')),
+                const SnackBar(content: Text('Upload bem-sucedido!')),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Nenhum arquivo selecionado.')),
               );
             }
           },

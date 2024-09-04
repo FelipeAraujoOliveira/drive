@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'google_drive_service.dart';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
-import 'splashScreen.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 class DocumentsScreen extends StatefulWidget {
   final String folderId;
@@ -16,80 +15,25 @@ class DocumentsScreen extends StatefulWidget {
 }
 
 class _DocumentsScreenState extends State<DocumentsScreen> {
-  List<drive.File>? _files;
+  List<drive.File>? _items;
 
   @override
   void initState() {
     super.initState();
-    _loadFiles();
+    _loadItems();
   }
 
-  Future<void> _loadFiles() async {
+  Future<void> _loadItems() async {
     try {
-      if (authenticatedDriveService != null) {
-        print("Carregando arquivos da pasta com ID: ${widget.folderId}");
-        final files =
-            await authenticatedDriveService!.listFiles(widget.folderId);
-        setState(() {
-          _files = files;
-        });
-      } else {
-        print("authenticatedDriveService é nulo na DocumentsScreen");
-      }
+      final googleDriveService = GoogleDriveService();
+      await googleDriveService.signIn();
+      final items = await googleDriveService.listFilesAndFolders(widget.folderId);
+      setState(() {
+        _items = items;
+      });
     } catch (error) {
-      print("Erro ao carregar arquivos: $error");
+      print("Erro ao carregar itens: $error");
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Documentos'),
-      ),
-      body: _files == null
-          ? const Center(child: CircularProgressIndicator())
-          : GridView.builder(
-              padding: const EdgeInsets.all(8.0),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                mainAxisSpacing: 4.0,
-                crossAxisSpacing: 4.0,
-              ),
-              itemCount: _files!.length,
-              itemBuilder: (context, index) {
-                final file = _files![index];
-                return GestureDetector(
-                  onTap: () {
-                    if (file.mimeType == 'application/vnd.google-apps.folder') {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              DocumentsScreen(folderId: file.id!),
-                        ),
-                      );
-                    } else {
-                      _showFileDetailsModal(context, file);
-                    }
-                  },
-                  child: GridTile(
-                    child: Icon(
-                      file.mimeType == 'application/vnd.google-apps.folder'
-                          ? Icons.folder
-                          : Icons.insert_drive_file,
-                    ),
-                    footer: Center(
-                      child: Text(
-                        file.name ?? 'Sem nome',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
   }
 
   void _showFileDetailsModal(BuildContext context, drive.File file) {
@@ -120,7 +64,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 IconButton(
                   icon: Icon(Icons.close),
                   onPressed: () {
-                    Navigator.of(modalContext).pop(); // Usar o context do modal aqui
+                    Navigator.of(modalContext).pop();
                   },
                 ),
               ],
@@ -135,24 +79,35 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               'Tipo: ${file.mimeType ?? 'Desconhecido'}',
               style: TextStyle(fontSize: 16),
             ),
+            SizedBox(height: 8),
+            Text(
+              'Tamanho: ${file.size != null ? (int.tryParse(file.size!)! / 1024).toStringAsFixed(2) : 'Desconhecido'} KB',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Data de Envio: ${file.createdTime != null ? file.createdTime!.toLocal().toString() : 'Desconhecido'}',
+              style: TextStyle(fontSize: 16),
+            ),
             SizedBox(height: 16),
             Center(
               child: ElevatedButton.icon(
                 onPressed: () async {
-                  Navigator.of(modalContext).pop(); // Feche o modal primeiro
+                  Navigator.of(modalContext).pop();
 
                   final directory = await getApplicationDocumentsDirectory();
                   final savePath = File('${directory.path}/${file.name}');
                   bool downloadSuccess = false;
 
                   try {
-                    await authenticatedDriveService!.downloadFile(file.id!, savePath);
+                    final googleDriveService = GoogleDriveService();
+                    await googleDriveService.signIn();
+                    await googleDriveService.downloadFile(file.id!, savePath);
                     downloadSuccess = true;
                   } catch (error) {
                     print("Erro ao baixar arquivo: $error");
                   }
 
-                  // Depois que o modal for fechado, mostre o SnackBar
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -174,10 +129,85 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   );
 }
 
-  String _formatDateTime(DateTime? dateTime) {
-    if (dateTime == null) {
-      return 'Desconhecido';
+  Future<void> _uploadFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+    if (result != null) {
+      File file = File(result.files.single.path!);
+      try {
+        final googleDriveService = GoogleDriveService();
+        await googleDriveService.signIn();
+        await googleDriveService.uploadFile(file, widget.folderId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Upload bem-sucedido!')),
+        );
+        _loadItems(); // Recarrega os itens para mostrar o arquivo recém-enviado
+      } catch (error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao fazer upload: $error')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhum arquivo selecionado.')),
+      );
     }
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Documentos'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.upload_file),
+            onPressed: _uploadFile,
+          ),
+        ],
+      ),
+      body: _items == null
+          ? const Center(child: CircularProgressIndicator())
+          : GridView.builder(
+              padding: const EdgeInsets.all(8.0),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 4.0,
+                crossAxisSpacing: 4.0,
+              ),
+              itemCount: _items!.length,
+              itemBuilder: (context, index) {
+                final item = _items![index];
+                return GestureDetector(
+                  onTap: () {
+                    if (item.mimeType == 'application/vnd.google-apps.folder') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => DocumentsScreen(folderId: item.id!),
+                        ),
+                      );
+                    } else {
+                      _showFileDetailsModal(context, item);
+                    }
+                  },
+                  child: GridTile(
+                    child: Icon(
+                      item.mimeType == 'application/vnd.google-apps.folder'
+                          ? Icons.folder
+                          : Icons.insert_drive_file,
+                      size: 50,
+                    ),
+                    footer: Center(
+                      child: Text(
+                        item.name ?? 'Sem nome',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
   }
 }
