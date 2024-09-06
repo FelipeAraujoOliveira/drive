@@ -34,7 +34,7 @@ class SplashScreen extends StatelessWidget {
             final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
             await googleDriveService.signIn();
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => DocumentsScreen()),
+              MaterialPageRoute(builder: (context) => DocumentsScreen(folderId: 'root')),
             );
           },
           child: const Text('Login com Google Drive'),
