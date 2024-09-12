@@ -1,8 +1,9 @@
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import 'dart:io'; // Import necessário para manipulação de arquivos
+import 'package:mime/mime.dart';
+import 'dart:io'; // Importar a classe File para manipulação de arquivos locais
 
 class GoogleDriveService {
   final GoogleSignIn _googleSignIn =
@@ -29,6 +30,7 @@ class GoogleDriveService {
     _httpClient = null;
   }
 
+  // Função para listar arquivos e pastas dentro de uma pasta
   Future<List<drive.File>> listFilesAndFolders(String folderId) async {
     if (_driveApi == null) {
       throw Exception('Not authenticated');
@@ -40,6 +42,7 @@ class GoogleDriveService {
     return fileList.files ?? [];
   }
 
+  // Função para fazer upload de arquivos
   Future<void> uploadFile(File file, String folderId) async {
     if (_driveApi == null) {
       throw Exception('Not authenticated');
@@ -47,69 +50,109 @@ class GoogleDriveService {
 
     final media = drive.Media(file.openRead(), file.lengthSync());
     final driveFile = drive.File();
-    driveFile.name = file.path.split('/').last; // Define o nome do arquivo
-    driveFile.parents = [folderId]; // Define a pasta onde o arquivo será salvo
+    driveFile.name = file.path.split('/').last;
+    driveFile.parents = [folderId];
 
     await _driveApi!.files.create(driveFile, uploadMedia: media);
   }
 
-  Future<void> downloadFile(String fileId, File saveFile) async {
+  // Função para obter o nome de uma pasta a partir do ID
+  Future<String> getFolderName(String folderId) async {
     if (_driveApi == null) {
       throw Exception('Not authenticated');
     }
 
-    try {
-      // Explicitly cast the result to `drive.File`
-      final drive.File file =
-          await _driveApi!.files.get(fileId, $fields: 'mimeType') as drive.File;
+    final folder =
+        await _driveApi!.files.get(folderId, $fields: 'name') as drive.File;
+    return folder.name ?? 'Sem Nome';
+  }
 
-      if (file.mimeType != null &&
-          file.mimeType!.startsWith('application/vnd.google-apps')) {
-        // If it's a Google Docs/Sheets/Slides file, export it
-        String exportMimeType;
+  // Função para obter os uploads recentes por pasta
+  Future<Map<String, List<drive.File>>> getRecentUploadsByFolder() async {
+    if (_driveApi == null) {
+      throw Exception('Not authenticated');
+    }
 
-        if (file.mimeType == 'application/vnd.google-apps.document') {
-          exportMimeType = 'application/pdf'; // Export Google Docs as PDF
-        } else if (file.mimeType == 'application/vnd.google-apps.spreadsheet') {
-          exportMimeType =
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'; // Export Google Sheets as XLSX
-        } else if (file.mimeType ==
-            'application/vnd.google-apps.presentation') {
-          exportMimeType =
-              'application/vnd.openxmlformats-officedocument.presentationml.presentation'; // Export Google Slides as PPTX
-        } else {
-          throw Exception('Unsupported Google file type');
-        }
+    final String query = "trashed = false";
+    final fileList = await _driveApi!.files.list(
+      q: query,
+      orderBy: 'modifiedTime desc',
+      $fields: "files(id, name, mimeType, parents, modifiedTime)",
+    );
 
-        final media = await _driveApi!.files.export(fileId, exportMimeType,
-            downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media?;
-        if (media != null) {
-          final Stream<List<int>> mediaStream = media.stream;
-          final fileSink = saveFile.openWrite();
-          await mediaStream.pipe(fileSink);
-          await fileSink.close();
-        } else {
-          throw Exception('Failed to export file.');
-        }
-      } else {
-        // If it's a regular file, download it directly
-        final media = await _driveApi!.files.get(fileId,
-            downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media?;
-        if (media != null) {
-          final Stream<List<int>> mediaStream = media.stream;
-          final fileSink = saveFile.openWrite();
-          await mediaStream.pipe(fileSink);
-          await fileSink.close();
-        } else {
-          throw Exception('Failed to download file.');
+    Map<String, List<drive.File>> uploadsByFolder = {};
+
+    if (fileList.files != null) {
+      for (var file in fileList.files!) {
+        if (file.parents != null && file.parents!.isNotEmpty) {
+          String parentId = file.parents!.first;
+          if (!uploadsByFolder.containsKey(parentId)) {
+            uploadsByFolder[parentId] = [];
+          }
+          uploadsByFolder[parentId]!.add(file);
         }
       }
-    } catch (error) {
-      throw Exception('Error downloading file: $error');
     }
+
+    return uploadsByFolder;
+  }
+
+  
+
+  // Função para baixar arquivos
+  Future<void> downloadFile(String fileId, File saveFile) async {
+  if (_driveApi == null) {
+    throw Exception('Not authenticated');
+  }
+
+  try {
+    // Cast explícito para garantir que a resposta seja do tipo drive.File
+    final drive.File driveFile = await _driveApi!.files.get(fileId, $fields: 'mimeType') as drive.File;
+
+    if (driveFile.mimeType != null && driveFile.mimeType!.startsWith('application/vnd.google-apps')) {
+      // Trata exportação de arquivos do Google Docs
+      String exportMimeType;
+      if (driveFile.mimeType == 'application/vnd.google-apps.document') {
+        exportMimeType = 'application/pdf';
+      } else if (driveFile.mimeType == 'application/vnd.google-apps.spreadsheet') {
+        exportMimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } else if (driveFile.mimeType == 'application/vnd.google-apps.presentation') {
+        exportMimeType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      } else {
+        throw Exception('Tipo de arquivo do Google não suportado');
+      }
+
+      final media = await _driveApi!.files.export(fileId, exportMimeType, downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media?;
+      
+      if (media != null) {
+        final Stream<List<int>> mediaStream = media.stream;
+        final fileSink = saveFile.openWrite();
+        await mediaStream.pipe(fileSink);
+        await fileSink.close();
+      } else {
+        throw Exception('Falha ao exportar arquivo.');
+      }
+    } else {
+      // Baixa arquivos não-Google
+      final media = await _driveApi!.files.get(fileId, downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media?;
+      
+      if (media != null) {
+        final Stream<List<int>> mediaStream = media.stream;
+        final fileSink = saveFile.openWrite();
+        await mediaStream.pipe(fileSink);
+        await fileSink.close();
+      } else {
+        throw Exception('Falha ao baixar arquivo.');
+      }
+    }
+  } catch (error) {
+    throw Exception('Erro ao baixar arquivo: $error');
   }
 }
 
+}
+
+// Classe personalizada para fazer requisições autenticadas
 class GoogleHttpClient extends http.BaseClient {
   final Map<String, String> _headers;
   final http.Client _client;
