@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'google_drive_service.dart';
-import 'Documentscreen.dart';
 import 'package:provider/provider.dart';
+import 'upload_history_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   @override
@@ -10,10 +10,11 @@ class SplashScreen extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () async {
-            final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
+            final googleDriveService =
+                Provider.of<GoogleDriveService>(context, listen: false);
             await googleDriveService.signIn();
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => DocumentsScreen(folderId: 'root')),
+              MaterialPageRoute(builder: (context) => UploadHistoryScreen()),
             );
           },
           child: const Text('Login com Google Drive'),

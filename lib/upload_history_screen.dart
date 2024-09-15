@@ -4,6 +4,7 @@ import 'google_drive_service.dart'; // Assumindo que seu serviço de Google Driv
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'splashScreen.dart'; // Importa a tela SplashScreen
 
 class UploadHistoryScreen extends StatefulWidget {
   @override
@@ -20,12 +21,12 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
   void initState() {
     super.initState();
     if (!_hasLoadedOnce) {
-      _loadRecentUploads(); // Carrega os dados apenas se nunca foi feito
+      _loadFilteredUploads(); // Carrega os dados apenas se nunca foi feito
     }
   }
 
-  // Função para carregar arquivos e pastas do Google Drive
-  Future<void> _loadRecentUploads() async {
+  // Função para carregar apenas pastas que começam com "$"
+  Future<void> _loadFilteredUploads() async {
     setState(() {
       _isLoading = true;
     });
@@ -33,16 +34,21 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
     try {
       final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
       await googleDriveService.signIn(); // Certifica que a autenticação foi feita
-      final uploads = await googleDriveService.getRecentUploadsByFolder();
+      final allFolders = await googleDriveService.getRecentUploadsByFolder();
 
-      // Obtem os nomes das pastas
-      for (String folderId in uploads.keys) {
+      // Filtra as pastas que começam com "$"
+      Map<String, List<drive.File>> filteredFolders = {};
+      for (String folderId in allFolders.keys) {
         final folderName = await googleDriveService.getFolderName(folderId);
-        _folderNames[folderId] = folderName;
+
+        if (folderName.startsWith('\$')) {
+          filteredFolders[folderId] = allFolders[folderId]!; // Adiciona apenas pastas que começam com "$"
+          _folderNames[folderId] = folderName; // Armazena o nome da pasta
+        }
       }
 
       setState(() {
-        _cachedUploads = uploads;
+        _cachedUploads = filteredFolders;
         _isLoading = false;
         _hasLoadedOnce = true;
       });
@@ -52,6 +58,20 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  // Função de logout
+  Future<void> _logout() async {
+    final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
+    await googleDriveService.signOut(); // Desconecta do Google Drive
+    // Redireciona para a SplashScreen após o logout
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => SplashScreen()), // SplashScreen como destino
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Desconectado com sucesso!')),
+    );
   }
 
   // Função de upload de arquivo para a pasta selecionada
@@ -66,7 +86,7 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Upload bem-sucedido!')),
         );
-        _loadRecentUploads(); // Recarrega os itens para mostrar o arquivo recém-enviado
+        _loadFilteredUploads(); // Recarrega os itens para mostrar o arquivo recém-enviado
       } catch (error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro ao fazer upload: $error')),
@@ -147,6 +167,12 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Histórico de Uploads'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout),
+            onPressed: _logout, // Função de logout ao pressionar o botão
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator()) // Exibe a espiral de carregamento
@@ -162,7 +188,7 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
                     String folderName = _folderNames[folderId] ?? 'Carregando...';
 
                     return ExpansionTile(
-                      title: Text('Pasta: $folderName'),
+                      title: Text('$folderName'),
                       children: [
                         ...files.map((file) {
                           return ListTile(

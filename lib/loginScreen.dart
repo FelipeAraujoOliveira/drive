@@ -9,14 +9,10 @@ class LoginService {
   Future<void> handleLogin() async {
     final GoogleDriveService driveService = GoogleDriveService();
     await driveService.signIn();
-
-    // Redirecionar para a tela de documentos ou realizar outras ações pós-login
   }
 
   Future<void> handleLogout() async {
     final GoogleDriveService driveService = GoogleDriveService();
     await driveService.signOut();
-
-    // Realizar outras ações pós-logout, se necessário
   }
 }
