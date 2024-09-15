@@ -41,7 +41,7 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
       for (String folderId in allFolders.keys) {
         final folderName = await googleDriveService.getFolderName(folderId);
 
-        if (folderName.startsWith('\$')) {
+        if (folderName.startsWith('\%')) {
           filteredFolders[folderId] = allFolders[folderId]!; // Adiciona apenas pastas que começam com "$"
           _folderNames[folderId] = folderName; // Armazena o nome da pasta
         }
