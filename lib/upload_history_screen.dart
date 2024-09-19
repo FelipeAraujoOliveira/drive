@@ -12,16 +12,19 @@ class UploadHistoryScreen extends StatefulWidget {
 }
 
 class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
-  Map<String, List<drive.File>> _cachedUploads = {}; // Cache dos uploads para evitar recarga
+  Map<String, List<drive.File>> _cachedUploads =
+      {}; // Cache dos uploads para evitar recarga
   Map<String, String> _folderNames = {}; // Nomes das pastas
   bool _isLoading = true; // Estado de carregamento
-  bool _hasLoadedOnce = false; // Verifica se os arquivos foram carregados uma vez
+  bool _hasLoadedOnce =
+      false; // Verifica se os arquivos foram carregados uma vez
 
   @override
   void initState() {
     super.initState();
     if (!_hasLoadedOnce) {
       _loadFilteredUploads(); // Carrega os dados apenas se nunca foi feito
+      _authenticateAndLoadData(); // Verifica autenticação e carrega os dados
     }
   }
 
@@ -32,9 +35,16 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
     });
 
     try {
-      final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
-      await googleDriveService.signIn(); // Certifica que a autenticação foi feita
+      final googleDriveService =
+          Provider.of<GoogleDriveService>(context, listen: false);
+      await googleDriveService
+          .signIn(); // Certifica que a autenticação foi feita
       final allFolders = await googleDriveService.getRecentUploadsByFolder();
+
+      if (!googleDriveService.isAuthenticated) {
+        _showAuthenticationDialog(); // Exibe diálogo se não autenticado
+        return;
+      }
 
       // Filtra as pastas que começam com "$"
       Map<String, List<drive.File>> filteredFolders = {};
@@ -42,8 +52,9 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
         final folderName = await googleDriveService.getFolderName(folderId);
 
         if (folderName.startsWith('\%')) {
-          filteredFolders[folderId] = allFolders[folderId]!; // Adiciona apenas pastas que começam com "$"
-          _folderNames[folderId] = folderName; // Armazena o nome da pasta
+          filteredFolders[folderId] = allFolders[
+              folderId]!; // Adiciona apenas pastas que começam com "$"
+          _folderNames[folderId] = folderName.substring(1);
         }
       }
 
@@ -60,14 +71,69 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
     }
   }
 
+  void _showAuthenticationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Não Autenticado'),
+          content: Text('Você não está autenticado. Deseja tentar novamente?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => SplashScreen()),
+                );
+              },
+              child: Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _authenticateAndLoadData(); // Tenta autenticar novamente
+              },
+              child: Text('Tentar Novamente'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _authenticateAndLoadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final googleDriveService =
+          Provider.of<GoogleDriveService>(context, listen: false);
+      await googleDriveService.signIn();
+
+      if (!googleDriveService.isAuthenticated) {
+        _showAuthenticationDialog(); // Exibe diálogo se não autenticado
+        return;
+      }
+
+      await _loadFilteredUploads(); // Se autenticado, carrega os dados
+    } catch (error) {
+      _showAuthenticationDialog(); // Exibe diálogo se houve erro
+    }
+  }
+
   // Função de logout
   Future<void> _logout() async {
-    final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
+    final googleDriveService =
+        Provider.of<GoogleDriveService>(context, listen: false);
     await googleDriveService.signOut(); // Desconecta do Google Drive
     // Redireciona para a SplashScreen após o logout
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => SplashScreen()), // SplashScreen como destino
+      MaterialPageRoute(
+          builder: (context) => SplashScreen()), // SplashScreen como destino
     );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Desconectado com sucesso!')),
@@ -81,7 +147,8 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
     if (result != null) {
       File file = File(result.files.single.path!);
       try {
-        final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
+        final googleDriveService =
+            Provider.of<GoogleDriveService>(context, listen: false);
         await googleDriveService.uploadFile(file, folderId);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Upload bem-sucedido!')),
@@ -100,7 +167,8 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
   }
 
   // Função para exibir o modal de download
-  Future<void> _showDownloadDialog(BuildContext context, drive.File file) async {
+  Future<void> _showDownloadDialog(
+      BuildContext context, drive.File file) async {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -130,8 +198,10 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
   // Função para baixar o arquivo
   Future<void> _downloadFile(drive.File file) async {
     try {
-      final googleDriveService = Provider.of<GoogleDriveService>(context, listen: false);
-      final savePath = await FilePicker.platform.getDirectoryPath(); // Pede ao usuário para escolher a pasta de destino
+      final googleDriveService =
+          Provider.of<GoogleDriveService>(context, listen: false);
+      final savePath = await FilePicker.platform
+          .getDirectoryPath(); // Pede ao usuário para escolher a pasta de destino
       if (savePath != null) {
         File saveFile = File('$savePath/${file.name}');
         await googleDriveService.downloadFile(file.id!, saveFile);
@@ -155,7 +225,8 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
     } else if (mimeType.startsWith('application/pdf')) {
       return Icons.picture_as_pdf;
     } else if (mimeType.startsWith('application/msword') ||
-        mimeType.startsWith('application/vnd.openxmlformats-officedocument.wordprocessingml')) {
+        mimeType.startsWith(
+            'application/vnd.openxmlformats-officedocument.wordprocessingml')) {
       return Icons.article;
     } else {
       return Icons.insert_drive_file;
@@ -175,7 +246,9 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator()) // Exibe a espiral de carregamento
+          ? const Center(
+              child:
+                  CircularProgressIndicator()) // Exibe a espiral de carregamento
           : _cachedUploads.isEmpty
               ? const Center(child: Text('Nenhum upload recente encontrado.'))
               : ListView.builder(
@@ -185,7 +258,8 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
                     List<drive.File> files = _cachedUploads[folderId]!;
 
                     // Verifica se o nome da pasta já foi carregado
-                    String folderName = _folderNames[folderId] ?? 'Carregando...';
+                    String folderName =
+                        _folderNames[folderId] ?? 'Carregando...';
 
                     return ExpansionTile(
                       title: Text('$folderName'),
@@ -194,15 +268,18 @@ class _UploadHistoryScreenState extends State<UploadHistoryScreen> {
                           return ListTile(
                             leading: Icon(_getFileIcon(file.mimeType ?? '')),
                             title: Text(file.name ?? 'Sem Nome'),
-                            subtitle: Text('Modificado em: ${file.modifiedTime}'),
+                            subtitle:
+                                Text('Modificado em: ${file.modifiedTime}'),
                             onTap: () {
-                              _showDownloadDialog(context, file); // Exibe o modal com a opção de download
+                              _showDownloadDialog(context,
+                                  file); // Exibe o modal com a opção de download
                             },
                           );
                         }).toList(),
                         ListTile(
                           title: ElevatedButton.icon(
-                            onPressed: () => _uploadFile(folderId), // Chama o upload para esta pasta
+                            onPressed: () => _uploadFile(
+                                folderId), // Chama o upload para esta pasta
                             icon: const Icon(Icons.upload_file),
                             label: Text('Fazer Upload para "$folderName"'),
                           ),

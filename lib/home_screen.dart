@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'upload_history_screen.dart';
+import 'splashScreen.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -10,7 +10,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: UploadHistoryScreen(),
+      body: SplashScreen(),
     );
   }
 }
